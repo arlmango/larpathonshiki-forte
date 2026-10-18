@@ -1,0 +1,82 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Анализ видео кассы</title>
+<style>
+:root{--bg:#fff;--fg:#1a1a1a;--mut:#666;--card:#f4f5f7;--ok:#1a7f37;--bad:#b42318;--ac:#0b5cff}
+@media(prefers-color-scheme:dark){:root{--bg:#111;--fg:#eee;--mut:#9aa;--card:#1c1e22;--ok:#4ac26b;--bad:#ff7b72;--ac:#6ea2ff}}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px system-ui,sans-serif}
+main{max-width:900px;margin:0 auto;padding:16px}
+.card{background:var(--card);border-radius:10px;padding:12px;margin:12px 0}
+video{width:100%;border-radius:8px;background:#000}
+button,input{font:inherit;padding:8px 12px;border-radius:8px;border:1px solid var(--mut);background:var(--bg);color:var(--fg)}
+button{background:var(--ac);color:#fff;border:0;cursor:pointer}
+.ev{cursor:pointer;border-left:4px solid var(--bad)}.ev:hover{outline:2px solid var(--ac)}
+.thumbs{display:flex;gap:6px;flex-wrap:wrap}.thumbs img{height:90px;border-radius:6px}
+.banner{border-left:4px solid var(--ac)}.banner.warn{border-left-color:var(--bad);background:color-mix(in srgb,var(--bad) 12%,var(--card))}
+.err{border:2px solid var(--bad)}.tag{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;background:var(--mut);color:#fff}.tag.ok{background:var(--ok)}
+.v-ok{color:var(--ok)}.v-bad{color:var(--bad)}.mut{color:var(--mut);font-size:13px}
+</style></head><body><main>
+<h1>Анализ видео кассы</h1>
+<div class="card"><input id="key" type="password" placeholder="X-API-Key" autocomplete="off">
+<input id="file" type="file" accept="video/*"> <button id="go">Анализировать</button>
+<p class="mut">Результат — признаки возможного нарушения для проверки человеком, а не юридический вывод. Качество детекции не подтверждено измерениями.</p></div>
+<div id="model" class="card banner" hidden></div>
+<div id="status" class="card" hidden></div>
+<video id="player" controls hidden></video>
+<div id="res"></div>
+<script>
+const $=id=>document.getElementById(id);
+const fmt=s=>{s=Math.round(s);return Math.floor(s/60)+":"+String(s%60).padStart(2,"0")};
+const esc=t=>{const d=document.createElement("div");d.textContent=t;return d.innerHTML};
+const TXT={candidate:"кандидат (не проверено)",validated:"проверено"};
+async function loadModel(key){
+  const m=$("model");m.hidden=true;if(!key)return;
+  try{const r=await fetch("/api/v1/model",{headers:{"X-API-Key":key}});
+    if(!r.ok)return;                       // 404/401 → баннер скрыт
+    const d=await r.json(),mi=d.model||{},rules=mi.rules||[];
+    const active=rules.filter(x=>x.active),validated=rules.filter(x=>x.validated);
+    let h='<b>Детектор:</b> '+esc(mi.name||"не определён")+' · <b>лицензия:</b> '+esc(mi.license||"неизвестна")+
+      (mi.available===false||mi.error?' · <b class="v-bad">модель недоступна</b>':'')+
+      '<div class="mut">Правила (кандидаты — нормы не проверены, решает человек):</div><ul>'+
+      (rules.map(x=>'<li>'+esc(x.type)+' — <span class="tag'+(x.validated?' ok':'')+'">'+(TXT[x.status]||esc(x.status))+'</span> '+
+        (x.active?'активно':'выключено')+'</li>').join("")||'<li>нет данных о правилах</li>')+'</ul>';
+    if(!active.length){m.classList.add("warn");
+      h+='<p class="v-bad"><b>Нет ни одного проверенного активного правила.</b> Сервис вернёт статус <code>failed</code> (ошибка покрытия). '+
+         'Это <u>не</u> результат «нарушений нет» (no_violation): анализ не выполнялся.</p>'}
+    else m.classList.remove("warn");
+    if(mi.allow_unvalidated_rules)h+='<p class="v-bad">Включён демонстрационный режим: правила НЕ проверены на размеченной выборке.</p>';
+    m.innerHTML=h;m.hidden=false;
+  }catch(e){}}
+$("key").addEventListener("change",()=>loadModel($("key").value));
+function showFailed(st,err){
+  st.classList.add("err");
+  st.innerHTML='<b class="v-bad">Анализ не выполнен (failed)</b> · код ошибки: <code class="v-bad">'+esc(err||"unknown")+'</code>'+
+    '<p class="v-bad"><b>Это НЕ результат «нарушений нет» (no_violation).</b> Анализ не завершён, о наличии или отсутствии нарушений ничего сказать нельзя.</p>'}
+$("go").onclick=async()=>{
+  const f=$("file").files[0],key=$("key").value; if(!f||!key){alert("Укажите ключ и файл");return}
+  $("res").innerHTML="";const p=$("player");p.src=URL.createObjectURL(f);p.hidden=false;
+  const st=$("status");st.hidden=false;st.classList.remove("err");st.textContent="Загрузка…";
+  const fd=new FormData();fd.append("file",f);
+  let r=await fetch("/api/v1/analyze",{method:"POST",headers:{"X-API-Key":key},body:fd});
+  if(!r.ok){st.classList.add("err");st.textContent="Ошибка запроса: HTTP "+r.status+" (это не результат «нарушений нет»)";return}
+  const {job_id}=await r.json();
+  const t0=Date.now();
+  for(;;){
+    await new Promise(r=>setTimeout(r,1500));
+    r=await fetch("/api/v1/jobs/"+job_id,{headers:{"X-API-Key":key}});
+    if(!r.ok){st.classList.add("err");st.textContent="Ошибка запроса: HTTP "+r.status+" (это не результат «нарушений нет»)";return}
+    const j=await r.json();
+    if(j.status==="processing"){st.textContent="Обработка… "+Math.round((Date.now()-t0)/1000)+" с";continue}
+    if(j.status==="failed"){showFailed(st,j.error);return}
+    st.hidden=true;render(j);return}
+};
+function render(j){
+  const el=$("res");
+  if(j.verdict==="no_violation"){el.innerHTML='<div class="card"><b class="v-ok">no_violation</b><p class="mut">Признаков возможного нарушения по активным правилам не найдено. Это не гарантия отсутствия нарушений; качество правил не подтверждено измерениями.</p></div>';return}
+  el.innerHTML='<div class="card"><b class="v-bad">violation</b> — признаки возможного нарушения (для проверки человеком): '+j.violations.length+'</div>';
+  j.violations.forEach(v=>{
+    const d=document.createElement("div");d.className="card ev";
+    d.innerHTML='<b>'+esc(v.type)+'</b> · таймкод '+fmt(v.timecode_sec)+'<p>'+esc(v.description)+'</p><div class="thumbs">'+
+      (v.evidence_frames||[]).slice(0,3).map(e=>'<img title="'+fmt(e.timestamp_sec)+'" src="data:image/jpeg;base64,'+e.image_base64+'">').join("")+'</div>';
+    d.onclick=()=>{const p=$("player");p.currentTime=v.timecode_sec;p.play();p.scrollIntoView({behavior:"smooth"})};
+    el.appendChild(d)})}
+</script></main></body></html>

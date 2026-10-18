@@ -1,0 +1,49 @@
+{
+  "_status": "UNVALIDATED heuristic thresholds. Detection quality is NOT measured on a labelled holdout. Confidence values are heuristic, not calibrated probabilities. Every rule is a candidate and disabled until validated: status 'validated' + validated:true + holdout {n_clips>=5, precision/recall finite in [0,1], evaluated_at ISO date, split_id, tool:'tools/evaluate.py'} measured on a labelled LOCAL holdout; a validation claim with an incomplete record -> invalid_config. Unknown rule keys -> invalid_config. Hard floors in code: min_person_sample_ratio>=0.10, zone.min_occupancy_to_analyse>=0.15; min_confidence_to_emit in [0,1]; max_events in [1,50].",
+  "_verdict_semantics": "Observations are always computed and exported for local human review; they never drive the verdict. Only enabled AND validated rules (or enabled rules under the demo-only opt-in ALLOW_UNVALIDATED_RULES=1) can produce verdict=violation. With no active rule the job fails with 'no validated rule active: coverage error'. second_person_in_operator_zone can never produce a violation (hard-coded).",
+  "stage1_width": 640,
+  "stage2_fps": 8.0,
+  "stage2_margin_sec": 3.0,
+  "stage2_max_total_sec": 60.0,
+  "deadline_reserve_sec": 20.0,
+  "motion_pixel_thresh": 25,
+  "motion_grid": [48, 27],
+  "smooth_samples_stage1": 3,
+  "smooth_samples_stage2": 5,
+  "min_person_sample_ratio": 0.10,
+  "zone": {
+    "override": null,
+    "heatmap_grid": 24,
+    "pad": 0.25,
+    "min_occupancy_to_analyse": 0.15,
+    "full_trust_occupancy": 0.6,
+    "activity_ring_scale": 2.0
+  },
+  "rules": {
+    "operator_zone_unattended_with_counter_activity": {
+      "enabled": false,
+      "status": "candidate",
+      "validated": false,
+      "holdout": null,
+      "min_sec": 8.0,
+      "activity_motion_thresh": 0.004,
+      "client_presence_ratio": 0.3,
+      "candidate_norms_for_human_review": ["p22_leave_before_end"]
+    },
+    "second_person_in_operator_zone": {
+      "enabled": false,
+      "status": "candidate",
+      "validated": false,
+      "holdout": null,
+      "observation_only": true,
+      "min_sec": 4.0,
+      "zone_pad": 0.5,
+      "max_pair_iou": 0.3,
+      "candidate_norms_for_human_review": ["p42_controller"]
+    }
+  },
+  "candidate_fraction_of_min_sec": 0.6,
+  "min_confidence_to_emit": 0.35,
+  "min_gap_between_events_sec": 10.0,
+  "max_events": 5
+}

@@ -1,0 +1,22 @@
+# Research-only stack (stage 3 VLM pilot). NOT used by the production service (app/).
+# Separate venv is REQUIRED: mlx-vlm pulls opencv-python, which clashes with the production opencv-python-headless.
+#   uv venv .venv-research && uv pip install --python .venv-research/bin/python -r requirements-research.txt
+#   .venv-research/bin/python tools/fetch_weights.py qwen2_vl_2b_instruct_mlx4   # pinned HF revision, SHA256-checked
+# Licences: docs/LICENSES.md "Research stack". Pilot verdict: NO-GO (docs/QUALITY.md, stage 3).
+mlx==0.32.4
+mlx-metal==0.32.4
+mlx-vlm==0.7.8
+transformers==5.20.1
+tokenizers==0.23.3
+huggingface-hub==2.2.0
+safetensors==0.8.0
+numpy==2.5.4
+opencv-python==5.0.0.93
+pillow==13.0.0
+llguidance==1.9.1
+datasets==5.1.0
+mlx-audio==0.5.9
+# stage 5 (SigLIP2 frozen encoder path)
+torch==2.14.1
+onnx==1.23.1
+onnxscript==0.7.2
